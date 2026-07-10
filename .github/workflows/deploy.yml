@@ -31,6 +31,11 @@ jobs:
           mvn clean package -DskipTests
 
 
+      - name: Check jar
+        run: |
+          ls -lh target
+
+
       - name: Upload jar
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -57,32 +62,58 @@ jobs:
             cd /www/wwwroot/java
 
 
+            echo "====== 查找jar ======"
+
+            JAR=$(ls *.jar | head -1)
+
+
+            if [ -z "$JAR" ]; then
+              echo "没有找到jar文件"
+              exit 1
+            fi
+
+
+            echo "当前jar: $JAR"
+
+
+
             echo "====== 停止旧服务 ======"
 
-            PID=$(ps -ef | grep shop-api.jar | grep -v grep | awk '{print $2}')
+
+            PID=$(ps -ef | grep "$JAR" | grep -v grep | awk '{print $2}')
+
 
             if [ -n "$PID" ]; then
+
               kill $PID
-              echo "旧服务已停止 PID=$PID"
+
+              echo "旧服务停止 PID=$PID"
+
               sleep 3
+
             else
+
               echo "没有发现旧服务"
+
             fi
 
 
 
             echo "====== 启动新服务 ======"
 
-            nohup java -jar $JAR > java.log 2>&1 &
+
+            nohup java -jar "$JAR" > java.log 2>&1 &
+
 
 
             sleep 10
 
 
 
-            echo "====== 检查服务状态 ======"
+            echo "====== 检查服务 ======"
 
-            NEW_PID=$(ps -ef | grep shop-api.jar | grep -v grep | awk '{print $2}')
+
+            NEW_PID=$(ps -ef | grep "$JAR" | grep -v grep | awk '{print $2}')
 
 
             if [ -n "$NEW_PID" ]; then
@@ -90,16 +121,16 @@ jobs:
               echo "================================"
               echo " Java部署成功"
               echo " PID: $NEW_PID"
+              echo " JAR: $JAR"
               echo " 日志: /www/wwwroot/java/java.log"
               echo "================================"
 
             else
 
-              echo "================================"
-              echo " Java启动失败"
+              echo "Java启动失败"
+
               echo "查看日志:"
-              echo "cat java.log"
-              echo "================================"
+              cat java.log
 
               exit 1
 
