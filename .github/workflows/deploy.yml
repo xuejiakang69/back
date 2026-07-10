@@ -73,10 +73,10 @@ jobs:
 
             echo "====== 启动新服务 ======"
 
-            nohup java -jar shop-api.jar > java.log 2>&1 &
+            nohup java -jar $JAR > java.log 2>&1 &
 
 
-            sleep 5
+            sleep 10
 
 
 
