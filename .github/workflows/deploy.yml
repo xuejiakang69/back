@@ -13,12 +13,17 @@ jobs:
 
     runs-on: ubuntu-latest
 
+
     steps:
 
+
+      # 拉取代码
       - name: Checkout code
         uses: actions/checkout@v5
 
 
+
+      # 配置 JDK 21
       - name: Setup JDK 21
         uses: actions/setup-java@v5
         with:
@@ -26,122 +31,210 @@ jobs:
           distribution: 'temurin'
 
 
+
+      # Maven打包
       - name: Build jar
         run: |
           mvn clean package -DskipTests
 
 
-      - name: Check jar
+
+      # 查看生成的jar
+      - name: Check build jar
         run: |
+          echo "====== Maven生成文件 ======"
           ls -lh target
 
+          echo "====== 查找jar ======"
+          find target -name "*.jar"
 
+
+
+      # 上传jar到服务器
       - name: Upload jar
         uses: appleboy/scp-action@v0.1.7
         with:
+
           host: ${{ secrets.SERVER_HOST }}
+
           username: root
+
           password: ${{ secrets.SERVER_PASSWORD }}
 
-          source: "target/*.jar"
-          target: "/www/wwwroot/java"
+
+          source: "target/untitled-1.0-SNAPSHOT.jar"
+
+          target: "/www/wwwroot/java/"
 
 
+
+      # 上传后检查服务器文件
+      - name: Check server jar
+        uses: appleboy/ssh-action@v1
+        with:
+
+          host: ${{ secrets.SERVER_HOST }}
+
+          username: root
+
+          password: ${{ secrets.SERVER_PASSWORD }}
+
+
+          script: |
+
+            echo "====== 查看服务器文件 ======"
+
+            cd /www/wwwroot/java
+
+            ls -lh
+
+
+
+      # 重启Java
       - name: Restart Java
         uses: appleboy/ssh-action@v1
         with:
+
           host: ${{ secrets.SERVER_HOST }}
+
           username: root
+
           password: ${{ secrets.SERVER_PASSWORD }}
 
+
           timeout: 60s
+
           command_timeout: 2m
 
+
           script: |
+
 
             cd /www/wwwroot/java
 
 
+
             echo "====== 查找jar ======"
+
 
             JAR=$(ls *.jar | head -1)
 
 
+
             if [ -z "$JAR" ]; then
+
               echo "没有找到jar文件"
+
               exit 1
+
             fi
 
 
-            echo "当前jar: $JAR"
+
+            echo "当前启动文件: $JAR"
 
 
 
-            echo "====== 停止旧服务 ======"
+
+            echo "====== 停止旧Java ======"
+
 
 
             PID=$(ps -ef | grep "$JAR" | grep -v grep | awk '{print $2}')
+
 
 
             if [ -n "$PID" ]; then
 
               kill $PID
 
-              echo "旧服务停止 PID=$PID"
+              echo "旧服务已停止 PID=$PID"
 
               sleep 3
 
             else
 
-              echo "没有发现旧服务"
+              echo "没有旧服务"
 
             fi
 
 
 
-            echo "====== 启动新服务 ======"
+
+            echo "====== 启动Java ======"
+
 
 
             nohup java -jar "$JAR" > java.log 2>&1 &
 
 
 
+
+            echo "等待启动..."
+
             sleep 10
 
 
 
-            echo "====== 检查服务 ======"
+
+
+            echo "====== 检查Java ======"
+
 
 
             NEW_PID=$(ps -ef | grep "$JAR" | grep -v grep | awk '{print $2}')
 
 
+
             if [ -n "$NEW_PID" ]; then
 
+
               echo "================================"
-              echo " Java部署成功"
-              echo " PID: $NEW_PID"
-              echo " JAR: $JAR"
-              echo " 日志: /www/wwwroot/java/java.log"
+
+              echo "🎉 Java启动成功"
+
+              echo "JAR: $JAR"
+
+              echo "PID: $NEW_PID"
+
+              echo "日志: /www/wwwroot/java/java.log"
+
               echo "================================"
+
 
             else
 
-              echo "Java启动失败"
+
+              echo "================================"
+
+              echo "❌ Java启动失败"
 
               echo "查看日志:"
+
               cat java.log
 
+              echo "================================"
+
+
               exit 1
+
 
             fi
 
 
 
+
+
+      # GitHub显示成功
       - name: Deploy Success
         run: |
+
           echo "================================"
+
           echo "🎉 Java 后端部署成功"
+
           echo "服务器: ${{ secrets.SERVER_HOST }}"
+
           echo "时间: $(date)"
+
           echo "================================"
