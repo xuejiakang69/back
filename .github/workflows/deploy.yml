@@ -102,9 +102,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: root
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: |
-            app.jar
-            VERSION
+          source: "app.jar,VERSION"
           target: "/www/wwwroot/java/java-prod/releases/v${{ env.VERSION }}/"
 
       ########################################
@@ -212,9 +210,8 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: root
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: |
-            app.jar
-            VERSION
+          source: "app.jar"
+
           target: "/www/wwwroot/java/java-test/"
 
       ########################################
