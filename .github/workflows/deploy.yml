@@ -159,9 +159,12 @@ jobs:
             fi
 
             echo "======启动Java======"
+  
             cd $APP/current
-
-            nohup java -jar app.jar \
+            
+            JAVA_HOME=/www/server/java/jdk-21.0.2
+            
+            nohup $JAVA_HOME/bin/java -jar app.jar \
             > $APP/logs/java.log 2>&1 &
 
             sleep 10
