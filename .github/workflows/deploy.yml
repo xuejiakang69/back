@@ -1,254 +1,244 @@
 name: Deploy Java Backend
 
-
 on:
   push:
     branches:
       - main
-
+      - test
   workflow_dispatch:
 
-
-
 jobs:
-
   deploy:
-
     runs-on: ubuntu-latest
 
-
     steps:
-
-
+      ########################################
       # 拉取代码
+      ########################################
       - name: Checkout code
         uses: actions/checkout@v5
 
+      ########################################
+      # 判断环境
+      ########################################
+      - name: Set Deploy Environment
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "ENV=production" >> $GITHUB_ENV
+            echo "IS_PROD=true" >> $GITHUB_ENV
+          else
+            echo "ENV=test" >> $GITHUB_ENV
+            echo "IS_PROD=false" >> $GITHUB_ENV
+          fi
 
+      ########################################
+      # 获取版本
+      ########################################
+      - name: Get Version
+        run: |
+          VERSION=$(cat VERSION)
 
-      # 配置JDK
+          if [ -z "$VERSION" ]; then
+            echo "❌ VERSION为空"
+            exit 1
+          fi
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "当前版本:v$VERSION"
+
+      ########################################
+      # JDK
+      ########################################
       - name: Setup JDK 21
         uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
 
-
-
+      ########################################
       # Maven打包
-      - name: Build jar
+      ########################################
+      - name: Build Jar
+        run: mvn clean package -DskipTests
+
+      ########################################
+      # 固定jar名称
+      ########################################
+      - name: Prepare Jar
         run: |
-          mvn clean package -DskipTests
-
-
-
-      # 查看并固定jar名称
-      - name: Prepare jar
-        run: |
-
-          echo "====== 查看target ======"
-
+          echo "查看target"
           ls -lh target
-
-
-          echo "====== 查找jar ======"
-
-          find target -name "*.jar"
-
-
-          echo "====== 复制jar ======"
-
           cp target/*.jar app.jar
-
-
-          echo "====== 最终文件 ======"
-
           ls -lh app.jar
 
+      ########################################
+      # 正式版本检查
+      ########################################
+      - name: Check Version Exists
+        if: env.IS_PROD == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: root
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            if [ -d "/www/wwwroot/java/java-prod/releases/v${{ env.VERSION }}" ]; then
+              echo "================================"
+              echo "❌版本已经存在"
+              echo "版本:v${{ env.VERSION }}"
+              echo "请修改VERSION"
+              echo "================================"
+              exit 1
+            fi
+            echo "✅版本可以发布"
 
-
-
-
-      # 上传服务器
-      - name: Upload jar
+      ########################################
+      # 上传正式版本
+      ########################################
+      - name: Upload Production Version
+        if: env.IS_PROD == 'true'
         uses: appleboy/scp-action@v0.1.7
-
         with:
-
           host: ${{ secrets.SERVER_HOST }}
-
           username: root
-
           password: ${{ secrets.SERVER_PASSWORD }}
+          source: |
+            app.jar
+            VERSION
+          target: "/www/wwwroot/java/java-prod/releases/v${{ env.VERSION }}/"
 
-
-          source: "app.jar"
-
-          target: "/www/wwwroot/java/"
-
-
-
-
-
-      # 检查服务器文件
-      - name: Check server file
-
-        uses: appleboy/ssh-action@v1
-
+      ########################################
+      # 切换current
+      ########################################
+      - name: Switch Current Version
+        if: env.IS_PROD == 'true'
+        uses: appleboy/ssh-action@v1.0.3
         with:
-
           host: ${{ secrets.SERVER_HOST }}
-
           username: root
-
           password: ${{ secrets.SERVER_PASSWORD }}
-
-
-
           script: |
+            APP=/www/wwwroot/java/java-prod
 
-            echo "======服务器文件======"
+            mkdir -p $APP/current
+            mkdir -p $APP/logs
 
-            cd /www/wwwroot/java
+            rm -rf $APP/current
 
-            ls -lh
+            cp -r \
+            $APP/releases/v${{ env.VERSION }} \
+            $APP/current
 
+            echo "================================"
+            echo "切换成功"
+            echo "当前版本:v${{ env.VERSION }}"
+            echo "================================"
 
-
-
-
+      ########################################
       # 重启Java
+      ########################################
       - name: Restart Java
-
-        uses: appleboy/ssh-action@v1
-
-
+        if: env.IS_PROD == 'true'
+        uses: appleboy/ssh-action@v1.0.3
         with:
-
-
           host: ${{ secrets.SERVER_HOST }}
-
           username: root
-
           password: ${{ secrets.SERVER_PASSWORD }}
-
-
-
           timeout: 60s
-
           command_timeout: 2m
-
-
-
           script: |
-
-
-            cd /www/wwwroot/java
-
-
+            APP=/www/wwwroot/java/java-prod
 
             echo "======停止旧服务======"
-
-
-
             PID=$(ps -ef | grep app.jar | grep -v grep | awk '{print $2}')
 
-
-
             if [ -n "$PID" ]; then
-
               kill $PID
-
-              echo "停止旧服务 PID=$PID"
-
-              sleep 3
-
+              echo "停止PID:$PID"
+              sleep 5
             else
-
               echo "没有旧服务"
-
             fi
 
-
-
-
-
             echo "======启动Java======"
+            cd $APP/current
 
-
-
-            nohup java -jar app.jar > java.log 2>&1 &
-
-
-
-            echo "等待启动..."
+            nohup java -jar app.jar \
+            > $APP/logs/java.log 2>&1 &
 
             sleep 10
 
-
-
-
-            echo "======检查Java======"
-
-
-
+            echo "======检查启动======"
             NEW_PID=$(ps -ef | grep app.jar | grep -v grep | awk '{print $2}')
 
-
-
             if [ -n "$NEW_PID" ]; then
-
-
-              echo "=============================="
-
+              echo "================================"
               echo "🎉 Java启动成功"
-
-              echo "PID: $NEW_PID"
-
-              echo "文件: app.jar"
-
-              echo "日志: /www/wwwroot/java/java.log"
-
-              echo "=============================="
-
-
-
+              echo "PID:$NEW_PID"
+              echo "版本:"
+              cat VERSION
+              echo "日志:$APP/logs/java.log"
+              echo "================================"
             else
-
-
-
-              echo "=============================="
-
+              echo "================================"
               echo "❌ Java启动失败"
-
-              echo "日志如下："
-
-              cat java.log
-
-              echo "=============================="
-
-
-
+              cat $APP/logs/java.log
+              echo "================================"
               exit 1
-
-
             fi
 
+      ########################################
+      # 清理旧版本
+      ########################################
+      - name: Clean Old Versions
+        if: env.IS_PROD == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: root
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            cd /www/wwwroot/java/java-prod/releases
+            ls -dt v* | tail -n +4 | xargs -r rm -rf
+            echo "历史版本清理完成"
 
+      ########################################
+      # 测试环境
+      ########################################
+      - name: Deploy Test Environment
+        if: env.IS_PROD == 'false'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: root
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: |
+            app.jar
+            VERSION
+          target: "/www/wwwroot/java/java-test/"
 
-
-
-      # GitHub显示成功
+      ########################################
+      # 成功
+      ########################################
       - name: Deploy Success
-
+        if: success()
         run: |
+          echo "================================"
+          echo "🎉 Java部署成功"
+          echo "环境:${{ env.ENV }}"
+          echo "版本:v${{ env.VERSION }}"
+          echo "分支:${{ github.ref_name }}"
+          echo "时间:$(date '+%Y-%m-%d %H:%M:%S')"
+          echo "================================"
 
-          echo "=============================="
-
-          echo "🎉 Java 后端部署成功"
-
-          echo "服务器: ${{ secrets.SERVER_HOST }}"
-
-          echo "时间: $(date)"
-
-          echo "=============================="
+      ########################################
+      # 失败
+      ########################################
+      - name: Deploy Failed
+        if: failure()
+        run: |
+          echo "================================"
+          echo "❌ Java部署失败"
+          echo "版本:v${{ env.VERSION }}"
+          echo "请查看上方日志"
+          echo "================================"
