@@ -45,6 +45,44 @@ jobs:
 
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "当前版本:v$VERSION"
+          
+          
+            ########################################
+      # 测试版本号检查
+      ########################################
+      - name: Check Test Version Greater Than Production
+        if: env.IS_PROD == 'false'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: root
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            PROD_VERSION_FILE=/www/wwwroot/java/java-prod/current/VERSION
+
+            if [ ! -f "$PROD_VERSION_FILE" ]; then
+              echo "⚠️ 正式环境没有版本文件，跳过检查"
+              exit 0
+            fi
+
+            PROD_VERSION=$(cat $PROD_VERSION_FILE)
+            TEST_VERSION=${{ env.VERSION }}
+
+            echo "正式版本: v$PROD_VERSION"
+            echo "测试版本: v$TEST_VERSION"
+
+            if [ "$(printf '%s\n' "$PROD_VERSION" "$TEST_VERSION" | sort -V | head -n1)" = "$TEST_VERSION" ]; then
+
+              if [ "$PROD_VERSION" = "$TEST_VERSION" ]; then
+                echo "❌ 测试版本不能等于正式版本"
+              else
+                echo "❌ 测试版本不能低于正式版本"
+              fi
+
+              exit 1
+            fi
+
+            echo "✅ 测试版本高于正式版本，可以部署"
 
       ########################################
       # JDK
