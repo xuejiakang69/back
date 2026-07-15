@@ -57,4 +57,12 @@ public class UserController {
     public boolean deleteUser(@PathVariable Long id) {
         return userService.deleteUser(id);
     }
+
+    /**
+     * 查询所有用户（POST）
+     */
+    @PostMapping("/list")
+    public List<User> listUsers() {
+        return userService.getAllUsers();
+    }
 }
