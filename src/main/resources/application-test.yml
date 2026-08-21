@@ -1,6 +1,6 @@
 # 测试环境配置
 server:
-  port: 8081
+  port: 8088
 
 spring:
   datasource:

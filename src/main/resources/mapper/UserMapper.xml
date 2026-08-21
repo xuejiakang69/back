@@ -4,19 +4,33 @@
 
     <resultMap id="BaseResultMap" type="org.example.entity.User">
         <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
         <result column="username" property="username"/>
-        <result column="email" property="email"/>
         <result column="password" property="password"/>
+        <result column="real_name" property="realName"/>
+        <result column="phone" property="phone"/>
+        <result column="email" property="email"/>
+        <result column="department" property="department"/>
+        <result column="status" property="status"/>
+        <result column="password_updated_at" property="passwordUpdatedAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, username, email, password
+        id, user_id, username, password, real_name, phone, email, department, status, password_updated_at, created_at, updated_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM user
         WHERE id = #{id}
+    </select>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user
+        WHERE user_id = #{userId}
     </select>
 
     <select id="selectByUsername" resultMap="BaseResultMap">
@@ -28,19 +42,43 @@
     <select id="selectAll" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM user
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="selectByStatus" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user
+        WHERE status = #{status}
+        ORDER BY created_at DESC
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO user (username, email, password)
-        VALUES (#{username}, #{email}, #{password})
+        INSERT INTO user (user_id, username, password, real_name, phone, email, department, status, password_updated_at)
+        VALUES (#{userId}, #{username}, #{password}, #{realName}, #{phone}, #{email}, #{department}, #{status}, #{passwordUpdatedAt})
     </insert>
 
     <update id="update">
         UPDATE user
         SET username = #{username},
+            real_name = #{realName},
+            phone = #{phone},
             email = #{email},
-            password = #{password}
+            department = #{department},
+            status = #{status}
         WHERE id = #{id}
+    </update>
+
+    <update id="updatePassword">
+        UPDATE user
+        SET password = #{password},
+            password_updated_at = #{passwordUpdatedAt}
+        WHERE user_id = #{userId}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE user
+        SET status = #{status}
+        WHERE user_id = #{userId}
     </update>
 
     <delete id="deleteById">
