@@ -1,4 +1,4 @@
-# 正式环境配置
+# 生产环境配置
 server:
   port: 8080
 
@@ -12,3 +12,7 @@ spring:
     init:
       mode: always
       schema-locations: classpath:schema.sql
+
+cors:
+  allowed-origins:
+    - https://online3.me
